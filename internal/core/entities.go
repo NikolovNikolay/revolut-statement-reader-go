@@ -22,9 +22,10 @@ type Currency string
 type ActivityType string
 
 type Activity struct {
+	Token      string
 	Currency   Currency
 	Type       ActivityType
-	Date   time.Time
+	Date       time.Time
 	Amount     float64
 	Units      float64
 	OpenRate   float64

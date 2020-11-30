@@ -36,6 +36,7 @@ func ProcessStatements(ctx *cli.Context) error {
 	folderFlag := flag.Folder()
 	path := ctx.String(folderFlag[0])
 	var activities []core.Activity
+	var deposits float64
 	if path != "" {
 		err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {
@@ -63,10 +64,11 @@ func ProcessStatements(ctx *cli.Context) error {
 				return err
 			}
 
-			a, err := p.Parse(lines)
+			a, d, err := p.Parse(lines)
 			if err != nil {
 				return err
 			}
+			deposits += d
 
 			activities = append(activities, a...)
 			return nil
@@ -79,7 +81,7 @@ func ProcessStatements(ctx *cli.Context) error {
 		sort.Sort(ByDate(activities))
 		start := activities[0].Date
 		end := activities[len(activities)-1].Date
-		_ = fmt.Sprintf("%s-%s", start.String(), end.String())
+		r := fmt.Sprintf("%s-%s", start.String(), end.String())
 
 		rs := conversion.NewExchangeRateService(
 			start.AddDate(0, -1, 0).Format("2006-01-02"),
@@ -87,9 +89,12 @@ func ProcessStatements(ctx *cli.Context) error {
 		)
 
 		tc := calculator.NewTaxCalculator(rs)
-		tc.Calculate(activities)
+		tax, err := tc.Calculate(activities, deposits)
+		if err != nil {
+			return err
+		}
 
-
+		logrus.Info(fmt.Sprintf(`Tax for period "%s": %f`, r, tax))
 	}
 
 	return nil

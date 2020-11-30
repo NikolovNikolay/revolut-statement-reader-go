@@ -22,17 +22,31 @@ func newRevolutStatementParser() Parser {
 	return &revolutStatementParser{}
 }
 
-func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, error) {
+func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, float64, error) {
 	var activities []core.Activity
 
 	expectActivities := false
 	inActivity := false
 	wait := false
 	isSkipCol := false
+	expectDeposit := false
+	var deposits float64
 
 	var a core.Activity
 	currentCol := 1
 	for _, l := range lines {
+		if strings.Contains(l, "Deposits") {
+			expectDeposit = true
+			continue
+		}
+		if expectDeposit {
+			dep, err := parseFloat(l)
+			if err != nil {
+				continue
+			}
+			deposits += dep
+			expectDeposit = false
+		}
 		if wait {
 			if currentCol == activityCols {
 				wait = false
@@ -72,7 +86,7 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, error) 
 				case 2:
 					t, err := parseDate(l)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					a.Date = t
 					currentCol++
@@ -91,23 +105,31 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, error) 
 						isSkipCol = true
 					}
 					continue
+				case 5:
+					if a.Type != core.CDEP && a.Type != core.CSD {
+						s := strings.Split(l, " ")
+						a.Token = s[0]
+					}
+					currentCol++
+					continue
 				case 6:
 					units, err := parseFloat(l)
 					if err != nil {
-						logrus.Warn(fmt.Sprintf("could not parse number from string: %s", l))
+						logrus.Debug(fmt.Sprintf("could not parse number from string: %s", l))
 						continue
 					}
 					a.Units = units
 					currentCol++
 					if isSkipCol {
 						a.Amount = a.Units
+						a.Units = 0
 						currentCol = getEndCol()
 					}
 					continue
 				case 7:
 					price, err := parseFloat(l)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					if a.Type == core.BUY {
 						a.OpenRate = price
@@ -122,7 +144,7 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, error) 
 					} else {
 						amount, err := parseFloat(l)
 						if err != nil {
-							return nil, err
+							return nil, 0, err
 						}
 						a.Amount = amount
 					}
@@ -135,7 +157,7 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, error) 
 			}
 		}
 	}
-	return activities, nil
+	return activities, deposits, nil
 }
 
 func getEndCol() int {
@@ -155,7 +177,7 @@ func parseActivityType(l string) core.ActivityType {
 }
 
 func parseFloat(l string) (float64, error) {
-	r := strings.NewReplacer(",", "", "(", "", ")", "")
+	r := strings.NewReplacer(",", "", "(", "", ")", "", "$", "")
 	l = r.Replace(l)
 	f, err := strconv.ParseFloat(l, 32)
 	return f, err

@@ -1,9 +1,12 @@
 package calculator
 
 import (
+	"fmt"
 	"github.com/nikolovnikolay/revolut-statement-reader-go/internal/conversion"
 	"github.com/nikolovnikolay/revolut-statement-reader-go/internal/core"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"sort"
+	"time"
 )
 
 const (
@@ -11,66 +14,118 @@ const (
 )
 
 type Calculator interface {
-	Calculate(activities []core.Activity) (float32, error)
+	Calculate(activities []core.Activity, deposits float64) (float64, error)
 }
 
 type balance struct {
-	operations int
-	balance    float64
-	rate       float64
-	add        float64
-	sub        float64
+	date           time.Time
+	operations     int
+	balance        float64
+	taxableBalance float64
+	rate           float64
+	boughtUnits    float64
+	soldUnits      float64
 }
 
 type taxCalculator struct {
-	es     *conversion.ExchangeRateService
-	dayMap map[string]*balance
+	es          *conversion.ExchangeRateService
+	dayMap      map[string]*balance
+	tokenMap    map[string]map[string]*balance
+	activityMap map[string]map[string][]core.Activity
 }
 
 func NewTaxCalculator(es *conversion.ExchangeRateService) Calculator {
 	return &taxCalculator{
-		es:     es,
-		dayMap: map[string]*balance{},
+		es:          es,
+		dayMap:      map[string]*balance{},
+		tokenMap:    map[string]map[string]*balance{},
+		activityMap: map[string]map[string][]core.Activity{},
 	}
 }
 
-func (c taxCalculator) Calculate(activities []core.Activity) (float32, error) {
+func (c taxCalculator) Calculate(activities []core.Activity, deposits float64) (float64, error) {
+	var gtb float64
+	var depRate float64
 	for _, a := range activities {
 		d := a.Date.Format(dateLayout)
-		if _, ok := c.dayMap[d]; !ok {
-			r := c.es.GetRateDorDate(a.Date, core.BGN)
-			c.dayMap[d] = &balance{
-				add:        0,
-				sub:        0,
-				balance:    0,
-				operations: 0,
-				rate:       r,
+
+		if _, ok := c.tokenMap[a.Token]; !ok {
+			c.tokenMap[a.Token] = map[string]*balance{}
+			c.activityMap[a.Token] = map[string][]core.Activity{}
+		}
+
+		r := c.es.GetRateDorDate(a.Date, core.BGN)
+		c.tokenMap[a.Token][d] = &balance{
+			date: a.Date,
+			rate: r,
+		}
+
+		if _, ok := c.activityMap[a.Token][d]; !ok {
+			c.activityMap[a.Token][d] = []core.Activity{}
+		}
+
+		c.activityMap[a.Token][d] = append(c.activityMap[a.Token][d], a)
+	}
+
+	for token, am := range c.activityMap {
+		dKeys := make([]string, 0, len(am))
+		for k := range am {
+			dKeys = append(dKeys, k)
+		}
+
+		sort.Strings(dKeys)
+		isFirstEntry := true
+		for i, date := range dKeys {
+			for _, a := range c.activityMap[token][date] {
+
+				if isFirstEntry && a.Type == core.SELL {
+					c.tokenMap[token][date].taxableBalance += a.Amount
+					logrus.Info(fmt.Sprintf("Closed a last year position: %s [%s]", a.Token, a.Date.String()))
+				}
+
+				b := c.tokenMap[token][date]
+
+				if a.Type == core.SELL {
+					b.soldUnits -= a.Units
+					b.balance += a.Amount * b.rate
+				} else if a.Type == core.BUY {
+					b.boughtUnits += a.Units
+					b.balance -= a.Amount * b.rate
+				}
+				isFirstEntry = false
+			}
+
+			if i == len(dKeys)-1 {
+				var bal float64
+				var bUnits float64
+				var sUnits float64
+				for _, b := range c.tokenMap[token] {
+					bal += b.balance
+					bUnits += b.boughtUnits
+					sUnits += b.soldUnits
+					if b.taxableBalance > 0 {
+						bal += b.taxableBalance
+					}
+				}
+
+				if bUnits > 0 && sUnits == 0 {
+					continue
+				} else if bUnits > 0 && sUnits < bUnits && bUnits-sUnits > 0.05 {
+					b := c.activityMap[token][date][len(c.activityMap[token][date])-1]
+					var price float64
+					if b.ClosedRate > 0 {
+						price = b.ClosedRate
+					} else {
+						price = b.OpenRate
+					}
+					bal += price * (bUnits - sUnits)
+				}
+
+				depRate = c.tokenMap[token][date].rate
+				gtb += bal
 			}
 		}
-
-		b := c.dayMap[d]
-		if a.Type == core.SELL || a.Type == core.DIV || a.Type == core.CDEP {
-			b.balance += a.Amount * b.rate
-			b.add += a.Amount * b.rate
-			b.operations++
-		} else if a.Type == core.BUY || a.Type == core.DIVNRA || a.Type == core.CSD {
-			b.balance += a.Amount * b.rate * -1
-			b.sub += a.Amount * b.rate * -1
-			b.operations++
-		} else {
-			log.Warn("unknown " + a.Type)
-		}
-	}
-	var total float64
-	var tsub float64
-	var tadd float64
-	var op int
-	for _, v := range c.dayMap {
-		total += v.balance
-		tadd += v.add
-		tsub += v.sub
-		op += v.operations
 	}
 
-	return 0, nil
+	return (gtb - (deposits * depRate)) * 0.1, nil
 }

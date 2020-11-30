@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/nikolovnikolay/revolut-statement-reader-go/internal/actions"
-	"github.com/urfave/cli/v2"
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 	"os"
 )
 
@@ -51,5 +51,5 @@ func setLogger() {
 	log.SetOutput(os.Stdout)
 
 	// Only log the warning severity or above.
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 }
