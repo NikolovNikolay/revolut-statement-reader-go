@@ -45,7 +45,6 @@ func NewTaxCalculator(es *conversion.ExchangeRateService) Calculator {
 
 func (c taxCalculator) Calculate(activities []core.Activity, deposits float64) (float64, error) {
 	var gtb float64
-	var depRate float64
 	for _, a := range activities {
 		d := a.Date.Format(dateLayout)
 
@@ -121,11 +120,10 @@ func (c taxCalculator) Calculate(activities []core.Activity, deposits float64) (
 					bal += price * (bUnits - sUnits)
 				}
 
-				depRate = c.tokenMap[token][date].rate
 				gtb += bal
 			}
 		}
 	}
 
-	return (gtb - (deposits * depRate)) * 0.1, nil
+	return gtb * 0.1, nil
 }

@@ -19,6 +19,8 @@ func (f *parserFactory) Build(t reader.StatementType) (Parser, error) {
 	switch t {
 	case reader.Revolut:
 		return newRevolutStatementParser(), nil
+	case reader.EToro:
+		return newEToroStatementParser(), nil
 	default:
 		return nil, fmt.Errorf("unknown statement type")
 	}

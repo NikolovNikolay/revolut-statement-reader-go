@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	pdf = ".pdf"
+	pdf  = ".pdf"
+	xlsx = ".xlsx"
 )
 
 type ByDate []core.Activity
@@ -28,7 +29,8 @@ func (a ByDate) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 var (
 	supportedFormats = map[string]reader.Reader{
-		pdf: reader.NewPDFReader(),
+		pdf:  reader.NewPDFReader(),
+		xlsx: reader.NewExcelReader(),
 	}
 )
 
@@ -46,12 +48,10 @@ func ProcessStatements(ctx *cli.Context) error {
 			var lines []string
 			ext := filepath.Ext(path)
 			if r, ok := supportedFormats[ext]; ok {
-				switch ext {
-				case pdf:
-					lines, err = handlePDF(path, info, r)
-					if err != nil {
-						return err
-					}
+				logrus.Info(fmt.Sprintf(`Reading file "%s"`, info.Name()))
+				lines, err = r.Read(path)
+				if err != nil {
+					return err
 				}
 			} else {
 				return fmt.Errorf(fmt.Sprintf(`File extension not supported: "%s", "%s"`, info.Name(), ext))
@@ -98,15 +98,6 @@ func ProcessStatements(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func handlePDF(path string, info os.FileInfo, r reader.Reader) ([]string, error) {
-	logrus.Info(fmt.Sprintf(`Reading file "%s"`, info.Name()))
-	text, err := r.Read(path)
-	if err != nil {
-		return nil, err
-	}
-	return text, nil
 }
 
 func getStatementType(lines []string) reader.StatementType {
