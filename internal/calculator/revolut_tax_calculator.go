@@ -14,7 +14,7 @@ const (
 )
 
 type Calculator interface {
-	Calculate(activities []core.Activity, deposits float64) (float64, error)
+	Calculate(activities []core.LinkedActivity, deposits float64) (float64, error)
 }
 
 type balance struct {
@@ -27,40 +27,40 @@ type balance struct {
 	soldUnits      float64
 }
 
-type taxCalculator struct {
+type revolutTaxCalculator struct {
 	es          *conversion.ExchangeRateService
 	dayMap      map[string]*balance
 	tokenMap    map[string]map[string]*balance
-	activityMap map[string]map[string][]core.Activity
+	activityMap map[string]map[string][]core.LinkedActivity
 }
 
-func NewTaxCalculator(es *conversion.ExchangeRateService) Calculator {
-	return &taxCalculator{
+func NewRevolutTaxCalculator(es *conversion.ExchangeRateService) Calculator {
+	return &revolutTaxCalculator{
 		es:          es,
 		dayMap:      map[string]*balance{},
 		tokenMap:    map[string]map[string]*balance{},
-		activityMap: map[string]map[string][]core.Activity{},
+		activityMap: map[string]map[string][]core.LinkedActivity{},
 	}
 }
 
-func (c taxCalculator) Calculate(activities []core.Activity, deposits float64) (float64, error) {
+func (c revolutTaxCalculator) Calculate(activities []core.LinkedActivity, deposits float64) (float64, error) {
 	var gtb float64
 	for _, a := range activities {
 		d := a.Date.Format(dateLayout)
 
 		if _, ok := c.tokenMap[a.Token]; !ok {
 			c.tokenMap[a.Token] = map[string]*balance{}
-			c.activityMap[a.Token] = map[string][]core.Activity{}
+			c.activityMap[a.Token] = map[string][]core.LinkedActivity{}
 		}
 
-		r := c.es.GetRateDorDate(a.Date, core.BGN)
+		r := c.es.GetRateForDate(a.Date, core.BGN)
 		c.tokenMap[a.Token][d] = &balance{
 			date: a.Date,
 			rate: r,
 		}
 
 		if _, ok := c.activityMap[a.Token][d]; !ok {
-			c.activityMap[a.Token][d] = []core.Activity{}
+			c.activityMap[a.Token][d] = []core.LinkedActivity{}
 		}
 
 		c.activityMap[a.Token][d] = append(c.activityMap[a.Token][d], a)

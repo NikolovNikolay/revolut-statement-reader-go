@@ -3,6 +3,7 @@ package reader
 import (
 	"bytes"
 	"github.com/ledongthuc/pdf"
+	"os"
 	"strings"
 )
 
@@ -12,7 +13,33 @@ func NewPDFReader() Reader {
 	return pdfReader{}
 }
 
+func (pr pdfReader) validatePDFStructure(path string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_RDWR, os.ModeAppend)
+	defer f.Close()
+
+	b := make([]byte, 10)
+	_, err = f.ReadAt(b, 0)
+
+	if err != nil {
+		return err
+	}
+
+	if !bytes.HasSuffix(b, []byte("%%EOF")) {
+		_, err := f.Write([]byte("%%EOF"))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (pr pdfReader) Read(path string) ([]string, error) {
+	err := pr.validatePDFStructure(path)
+	if err != nil {
+		return nil, err
+	}
+
 	f, r, err := pdf.Open(path)
 	defer f.Close()
 
@@ -21,11 +48,11 @@ func (pr pdfReader) Read(path string) ([]string, error) {
 	}
 
 	var buf bytes.Buffer
-	b, err := r.GetPlainText()
+	bu, err := r.GetPlainText()
 	if err != nil {
 		return nil, err
 	}
-	_, err = buf.ReadFrom(b)
+	_, err = buf.ReadFrom(bu)
 	if err != nil {
 		return nil, err
 	}

@@ -22,8 +22,8 @@ func newRevolutStatementParser() Parser {
 	return &revolutStatementParser{}
 }
 
-func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, float64, error) {
-	var activities []core.Activity
+func (p *revolutStatementParser) Parse(lines []string) ([]core.LinkedActivity, float64, error) {
+	var activities []core.LinkedActivity
 
 	expectActivities := false
 	inActivity := false
@@ -32,7 +32,7 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, float64
 	expectDeposit := false
 	var deposits float64
 
-	var a core.Activity
+	var a core.LinkedActivity
 	currentCol := 1
 	for _, l := range lines {
 		if strings.Contains(l, "Deposits") {
@@ -77,7 +77,7 @@ func (p *revolutStatementParser) Parse(lines []string) ([]core.Activity, float64
 				_, err := parseDate(l)
 				if err == nil {
 					inActivity = true
-					a = core.Activity{}
+					a = core.LinkedActivity{}
 					currentCol++
 				}
 				continue

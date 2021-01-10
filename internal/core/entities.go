@@ -13,6 +13,8 @@ const (
 	MAS    ActivityType = "MAS"
 	CDEP   ActivityType = "CDEP"
 
+	LINKED ActivityType = "LINKED"
+
 	USD Currency = "USD"
 	BGN Currency = "BGN"
 )
@@ -20,6 +22,12 @@ const (
 type Currency string
 
 type ActivityType string
+
+type LinkedActivity struct {
+	Activity
+	OpenDate   time.Time
+	ClosedDate time.Time
+}
 
 type Activity struct {
 	Token      string

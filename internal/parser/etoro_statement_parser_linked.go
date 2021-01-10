@@ -6,27 +6,16 @@ import (
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
-	"time"
 )
 
-const (
-	eToroDateLayout = "02.01.2006"
-
-	accountDetailsSheet        = "Account Details"
-	closedPositionsSheet       = "Closed Positions"
-	transactionsReportSheet    = "Transactions Report"
-	closedPositionsColCount    = 17
-	transactionsReportColCount = 9
-)
-
-type eToroStatementParser struct {
+type eToroStatementParserLinked struct {
 }
 
-func newEToroStatementParser() Parser {
-	return &eToroStatementParser{}
+func newEToroStatementParserLinked() Parser {
+	return &eToroStatementParserLinked{}
 }
 
-func (p *eToroStatementParser) Parse(lines []string) ([]core.LinkedActivity, float64, error) {
+func (p *eToroStatementParserLinked) Parse(lines []string) ([]core.LinkedActivity, float64, error) {
 	var currentSheet string
 	var currentPositionID string
 	var currentToken string
@@ -102,86 +91,58 @@ func (p *eToroStatementParser) Parse(lines []string) ([]core.LinkedActivity, flo
 	var activities []core.LinkedActivity
 	for k, v := range cpm {
 		if _, err := strconv.ParseFloat(k, 64); err == nil && len(v) == closedPositionsColCount+1 {
-			open := core.LinkedActivity{}
-			closed := core.LinkedActivity{}
+			a := core.LinkedActivity{}
 
 			amount, err := parseEtoroFloat(v[3])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse number from string: %s", v[3]))
 				continue
 			}
-			open.Amount = amount
-			closed.Amount = amount
+			a.Amount = amount
 
 			units, err := parseEtoroFloat(v[4])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse number from string: %s", v[4]))
 				continue
 			}
-			open.Units = units
-			closed.Units = units
+			a.Units = units
 
-			open.Type = core.BUY
-			closed.Type = core.SELL
-			open.Currency = core.USD
-			closed.Currency = core.USD
+			a.Type = core.LINKED
+			a.Currency = core.USD
 
 			or, err := parseEtoroFloat(v[5])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse number from string: %s", v[5]))
 				continue
 			}
-			open.OpenRate = or
+			a.OpenRate = or
 
 			cr, err := parseEtoroFloat(v[6])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse number from string: %s", v[6]))
 				continue
 			}
-			open.ClosedRate = cr
+			a.ClosedRate = cr
 
 			od, err := parseEtoroDate(strings.Split(v[9], " ")[0])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse date from string: %s", v[9]))
 				continue
 			}
-			open.Date = od
+			a.OpenDate = od
 
 			cd, err := parseEtoroDate(strings.Split(v[10], " ")[0])
 			if err != nil {
 				logrus.Debug(fmt.Sprintf("could not parse date from string: %s", v[10]))
 				continue
 			}
-			closed.Date = cd
 
-			open.Token = v[len(v)-1]
-			closed.Token = v[len(v)-1]
-
-			activities = append(activities, open)
-			activities = append(activities, closed)
+			a.ClosedDate = cd
+			a.Date = cd
+			a.Token = v[len(v)-1]
+			activities = append(activities, a)
 		}
 	}
 
 	return activities, deposits, nil
-}
-
-func updateStatus(l string, currentSheet *string) {
-	if l == accountDetailsSheet {
-		*currentSheet = accountDetailsSheet
-	} else if l == closedPositionsSheet {
-		*currentSheet = closedPositionsSheet
-	} else if l == transactionsReportSheet {
-		*currentSheet = transactionsReportSheet
-	}
-}
-
-func parseEtoroFloat(l string) (float64, error) {
-	r := strings.NewReplacer(",", ".", "(", "", ")", "", "$", "")
-	l = r.Replace(l)
-	f, err := strconv.ParseFloat(l, 32)
-	return f, err
-}
-
-func parseEtoroDate(l string) (time.Time, error) {
-	return time.Parse(eToroDateLayout, l)
 }

@@ -34,7 +34,7 @@ type ratesResponse struct {
 	Rates map[string]map[string]float64 `json:"rates"`
 }
 
-func (s *ExchangeRateService) GetRateDorDate(date time.Time, currency core.Currency) float64 {
+func (s *ExchangeRateService) GetRateForDate(date time.Time, currency core.Currency) float64 {
 	var ok bool
 	var rate float64
 	for !ok {
